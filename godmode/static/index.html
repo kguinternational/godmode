@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GodMode — Public Haven Platform | KGU International & OpenBot 1.0</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    body { background: #020617; color: #f1f5f9; }
+    .glass { background: rgba(15, 23, 42, 0.88); backdrop-filter: blur(12px); border: 1px solid rgba(51, 65, 85, 0.7); }
+    #nc-map { height: 420px; width: 100%; border-radius: 0.75rem; z-index: 10; }
+    .leaflet-tile-pane { filter: brightness(0.75) contrast(1.15) saturate(0.8); }
+  </style>
+</head>
+<body class="min-h-screen font-sans antialiased">
+  <header class="border-b border-slate-800 bg-slate-950/95 sticky top-0 z-50 backdrop-blur">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-400 to-cyan-500 text-slate-950 font-black text-lg flex items-center justify-center shadow-lg">G</div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="font-extrabold tracking-tight text-white text-base sm:text-lg">GODMODE — PUBLIC HAVEN PLATFORM</h1>
+            <span class="text-[11px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-mono">100% OPEN SOURCE (MIT)</span>
+          </div>
+          <p class="text-xs text-slate-400">NC DOT DriveNC • USGS NWIS Rivers • 7-County Repeaters • 2 CFR 200 & N.C.G.S. § 143C-6-23 Compliance • OpenBot 1.0 (Aria)</p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2 text-xs">
+        <span id="overseer-pill" class="px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-700 text-cyan-300 font-mono">Aria: ollama/gemma4:12b</span>
+        <button onclick="refreshStreams()" class="px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold transition">Sync Live Feeds</button>
+      </div>
+    </div>
+
+    <!-- Navigation Tabs -->
+    <div class="max-w-7xl mx-auto px-4 flex gap-2 pb-2 text-xs font-semibold overflow-x-auto">
+      <button onclick="switchTab('gis')" id="tab-btn-gis" class="px-3.5 py-1.5 rounded-lg bg-cyan-500 text-slate-950">1. NC GIS Live Radar ($45k Scope)</button>
+      <button onclick="switchTab('compliance')" id="tab-btn-compliance" class="px-3.5 py-1.5 rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700">2. Fiscal Audit, Registrations & QPR ($35k Scope)</button>
+      <button onclick="switchTab('openbot1')" id="tab-btn-openbot1" class="px-3.5 py-1.5 rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700">3. Aria Overseer & OpenBot 1.0 Upgrades</button>
+    </div>
+  </header>
+
+  <main class="max-w-7xl mx-auto px-4 py-6 space-y-6">
+
+    <!-- Top Live KPI Strip -->
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div class="glass rounded-xl p-4 border-l-4 border-l-cyan-400">
+        <div class="text-[11px] uppercase text-slate-400 font-semibold">NC DOT DriveNC Cameras</div>
+        <div id="kpi-cams" class="text-2xl font-black text-white mt-1">--</div>
+        <div id="kpi-cams-sub" class="text-xs text-cyan-300 font-mono mt-0.5">[OBSERVED] Statewide Live</div>
+      </div>
+      <div class="glass rounded-xl p-4 border-l-4 border-l-emerald-400">
+        <div class="text-[11px] uppercase text-slate-400 font-semibold">USGS River Sensors</div>
+        <div id="kpi-rivers" class="text-2xl font-black text-white mt-1">-- / 7</div>
+        <div id="kpi-rivers-sub" class="text-xs text-emerald-300 font-mono mt-0.5">[OBSERVED] Real-Time NWIS</div>
+      </div>
+      <div class="glass rounded-xl p-4 border-l-4 border-l-amber-400">
+        <div class="text-[11px] uppercase text-slate-400 font-semibold">County Repeaters & NOAA</div>
+        <div id="kpi-repeaters" class="text-2xl font-black text-white mt-1">7 Counties</div>
+        <div id="kpi-alerts-sub" class="text-xs text-amber-300 font-mono mt-0.5">NWS NC Alerts: --</div>
+      </div>
+      <div class="glass rounded-xl p-4 border-l-4 border-l-purple-400">
+        <div class="text-[11px] uppercase text-slate-400 font-semibold">2 CFR 200 SHA-256 Ledger</div>
+        <div id="kpi-audit" class="text-2xl font-black text-emerald-400 mt-1">VERIFIED</div>
+        <div id="kpi-gates-sub" class="text-xs text-purple-300 font-mono mt-0.5">Human Portal Gates: 5</div>
+      </div>
+    </div>
+
+    <!-- TAB 1: GIS RADAR -->
+    <section id="tab-gis" class="space-y-6">
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div class="lg:col-span-2 glass rounded-2xl p-4 space-y-3">
+          <div class="flex items-center justify-between">
+            <h2 class="font-bold text-white text-sm">North Carolina Live Spatial Situational Map (OpenStreetMap + Leaflet)</h2>
+            <span id="last-sync-label" class="text-xs font-mono text-slate-400">Syncing...</span>
+          </div>
+          <div id="nc-map"></div>
+        </div>
+
+        <!-- Selected NC DOT Live Camera Feed Viewer -->
+        <div class="glass rounded-2xl p-4 flex flex-col justify-between space-y-3">
+          <div>
+            <div class="flex items-center justify-between">
+              <h2 class="font-bold text-white text-sm">Live NC DOT Camera Snapshot</h2>
+              <span class="text-[10px] px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-300 font-mono">[OBSERVED]</span>
+            </div>
+            <p id="cam-viewer-title" class="text-xs text-slate-300 font-mono mt-1">Select any camera below or on map</p>
+            <div class="mt-3 rounded-xl overflow-hidden bg-slate-900 border border-slate-800 aspect-video flex items-center justify-center">
+              <img id="cam-viewer-img" src="" alt="Live NCDOT Camera" class="w-full h-full object-cover hidden" />
+              <span id="cam-viewer-placeholder" class="text-xs text-slate-500 px-4 text-center">Loading live DriveNC corridor snapshot...</span>
+            </div>
+          </div>
+          <div class="max-h-44 overflow-y-auto divide-y divide-slate-800 text-xs" id="cam-list"></div>
+        </div>
+      </div>
+
+      <!-- USGS River Gauges + 7-County Repeaters -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div class="glass rounded-2xl p-5">
+          <h3 class="font-bold text-white text-sm mb-3">USGS Real-Time North Carolina River Basin Sensors (`00065` Stage / `00060` Flow)</h3>
+          <div class="overflow-x-auto">
+            <table class="w-full text-xs text-left">
+              <thead class="text-slate-400 border-b border-slate-800">
+                <tr><th class="py-2">Basin / Site</th><th class="py-2">County</th><th class="py-2">Height (ft)</th><th class="py-2">Flow (cfs)</th><th class="py-2">Status</th></tr>
+              </thead>
+              <tbody id="usgs-tbody" class="divide-y divide-slate-800/70 font-mono"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="glass rounded-2xl p-5">
+          <h3 class="font-bold text-white text-sm mb-3">7-County Emergency Repeater, LoRa Mesh & NOAA Net Directory</h3>
+          <div class="overflow-x-auto">
+            <table class="w-full text-xs text-left">
+              <thead class="text-slate-400 border-b border-slate-800">
+                <tr><th class="py-2">County</th><th class="py-2">Callsign</th><th class="py-2">Freq / Tone</th><th class="py-2">NOAA</th><th class="py-2">LoRa Mesh</th></tr>
+              </thead>
+              <tbody id="repeater-tbody" class="divide-y divide-slate-800/70 font-mono"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 2: FISCAL COMPLIANCE, STATE AUDIT & QUARTERLY PROGRESS REPORTS -->
+    <section id="tab-compliance" class="hidden space-y-6">
+      <div class="glass rounded-2xl p-5 space-y-4">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 class="font-bold text-white text-base">What Are We Waiting On? — Human Registration & Portal Submission Gates</h2>
+            <p class="text-xs text-slate-400">Software, GIS feeds, SF-424A budgets, and SHA-256 audit ledgers are 100% ready. Update your legal IDs below as you complete each human portal gate:</p>
+          </div>
+          <button onclick="generateQPR()" class="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs">Generate 2026-Q4 Progress Report (Ollama)</button>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-xs text-left">
+            <thead class="text-slate-400 border-b border-slate-800">
+              <tr><th class="py-2">Authority</th><th class="py-2">Credential</th><th class="py-2">Identifier</th><th class="py-2">Status</th><th class="py-2">Blocking Human Gate</th><th class="py-2">Update</th></tr>
+            </thead>
+            <tbody id="reg-tbody" class="divide-y divide-slate-800/70"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div class="glass rounded-2xl p-5 space-y-3">
+          <div class="flex items-center justify-between">
+            <h3 class="font-bold text-white text-sm">2 CFR Part 200 & N.C.G.S. § 143C-6-23 SHA-256 Fiscal Ledger</h3>
+            <span id="chain-hash-badge" class="text-[11px] font-mono text-emerald-400"></span>
+          </div>
+          <div class="max-h-80 overflow-y-auto divide-y divide-slate-800 text-xs font-mono" id="ledger-list"></div>
+        </div>
+
+        <div class="glass rounded-2xl p-5 space-y-3">
+          <h3 class="font-bold text-white text-sm">Compiled Quarterly Progress & SF-425 Report Preview</h3>
+          <textarea id="qpr-output" rows="15" readonly class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs font-mono text-slate-200" placeholder="Click 'Generate 2026-Q4 Progress Report' above to compile an audit-ready report from live GIS & ledger telemetry..."></textarea>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 3: ARIA OVERSEER & OPENBOT 1.0 (GROKBOT 1.0 OPEN-SOURCE PARITY) -->
+    <section id="tab-openbot1" class="hidden space-y-6">
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div class="glass rounded-2xl p-5 space-y-3">
+          <h3 class="font-bold text-white text-sm">Aria — Executive Chief of Staff Overseer</h3>
+          <p class="text-xs text-slate-300 leading-relaxed">Aria continuously supervises GIS ingestion, SHA-256 fiscal audit integrity, Credit Shield token optimization, and OpenBot queue execution on 100% open-source local Ollama (`gemma4:12b`).</p>
+          <div id="aria-routines" class="space-y-2 text-xs"></div>
+        </div>
+
+        <div class="lg:col-span-2 glass rounded-2xl p-5 space-y-3">
+          <div class="flex items-center justify-between">
+            <h3 class="font-bold text-white text-sm">OpenBot 1.0 Per-Bot Usage Dashboard ($0.00 Open-Source Compute)</h3>
+            <span id="tailscale-badge" class="text-xs font-mono px-2.5 py-1 rounded bg-slate-900 border border-slate-700 text-cyan-300">Tailscale: Checking...</span>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-xs text-left">
+              <thead class="text-slate-400 border-b border-slate-800">
+                <tr><th class="py-2">Bot</th><th class="py-2">Model</th><th class="py-2">Total Tokens</th><th class="py-2">Avg Latency</th><th class="py-2">API Cost</th></tr>
+              </thead>
+              <tbody id="usage-tbody" class="divide-y divide-slate-800/70 font-mono"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div class="glass rounded-2xl p-5 space-y-3">
+          <h3 class="font-bold text-white text-sm">Team "Review Learnings" Approval Queue (GrokBot 1.0 Parity)</h3>
+          <p class="text-xs text-slate-400">Teammate-proposed bot rules stay held until approved by Owner/Manager:</p>
+          <div id="learnings-list" class="space-y-2 text-xs"></div>
+        </div>
+
+        <div class="glass rounded-2xl p-5 space-y-3">
+          <h3 class="font-bold text-white text-sm">Universal Share Sheet + Scam-Check Intake</h3>
+          <input id="share-title" type="text" placeholder="Title (e.g. Suspicious SMS or County Partner Note)" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white" />
+          <textarea id="share-body" rows="3" placeholder="Paste message, URL, or field note to route through Aria Scam-Check..." class="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-xs text-white"></textarea>
+          <button onclick="submitShareSheet()" class="px-4 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs">Send to Aria Share Sheet</button>
+          <div id="share-result" class="text-xs font-mono text-emerald-300"></div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <script>
+    const API_BASE = window.location.protocol.startsWith('http') && window.location.port === '8096'
+      ? ''
+      : 'http://127.0.0.1:8096';
+
+    let map, markersLayer;
+
+    function initMap() {
+      map = L.map('nc-map').setView([35.38, -80.2], 7);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 18,
+        attribution: '&copy; OpenStreetMap contributors | KGU GodMode Open Source'
+      }).addTo(map);
+      markersLayer = L.layerGroup().addTo(map);
+    }
+
+    function switchTab(tab) {
+      ['gis', 'compliance', 'openbot1'].forEach(t => {
+        document.getElementById('tab-' + t).classList.toggle('hidden', t !== tab);
+        const btn = document.getElementById('tab-btn-' + t);
+        btn.className = t === tab
+          ? 'px-3.5 py-1.5 rounded-lg bg-cyan-500 text-slate-950 font-bold'
+          : 'px-3.5 py-1.5 rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700';
+      });
+      if (tab === 'gis' && map) setTimeout(() => map.invalidateSize(), 100);
+    }
+
+    function selectCamera(cam) {
+      document.getElementById('cam-viewer-title').textContent = `${cam.county} County — ${cam.roadway} (${cam.location})`;
+      const img = document.getElementById('cam-viewer-img');
+      img.src = cam.image_url + '?t=' + Date.now();
+      img.classList.remove('hidden');
+      document.getElementById('cam-viewer-placeholder').classList.add('hidden');
+      if (map && cam.lat && cam.lng) map.setView([cam.lat, cam.lng], 11);
+    }
+
+    async function loadAll() {
+      try {
+        const [streamsRes, compRes, ariaRes, ob1Res] = await Promise.all([
+          fetch(API_BASE + '/api/streams/summary').then(r => r.json()),
+          fetch(API_BASE + '/api/compliance/overview').then(r => r.json()),
+          fetch(API_BASE + '/api/aria/status').then(r => r.json()),
+          fetch(API_BASE + '/api/openbot1/dashboard').then(r => r.json())
+        ]);
+
+        // KPIs
+        const cams = streamsRes.ncdot_cameras || {};
+        const rivers = streamsRes.usgs_rivers || {};
+        const alerts = streamsRes.nws_alerts || {};
+        const reps = streamsRes.county_repeaters || {};
+
+        document.getElementById('kpi-cams').textContent = (cams.total_statewide || 0).toLocaleString();
+        document.getElementById('kpi-cams-sub').textContent = `${cams.provenance || '[OBSERVED]'} • ${cams.target_county_count || 0} in Target Counties`;
+        document.getElementById('kpi-rivers').textContent = `${rivers.live_gauges_count || 0} / 7`;
+        document.getElementById('kpi-alerts-sub').textContent = `Active NWS NC Alerts: ${alerts.active_count || 0}`;
+        document.getElementById('kpi-audit').textContent = compRes.audit_chain?.valid ? 'SHA-256 VALID' : 'CHECK LEDGER';
+        document.getElementById('kpi-gates-sub').textContent = `Human Portal Gates Left: ${compRes.human_gates_remaining}`;
+        document.getElementById('last-sync-label').textContent = `Last Sync: ${streamsRes.timestamp || ''}`;
+
+        // Map + Camera list
+        if (markersLayer) markersLayer.clearLayers();
+        const camList = document.getElementById('cam-list');
+        camList.innerHTML = '';
+        (cams.cameras || []).slice(0, 25).forEach((c, idx) => {
+          if (idx === 0) selectCamera(c);
+          if (markersLayer && c.lat && c.lng) {
+            const m = L.circleMarker([c.lat, c.lng], { radius: 5, color: c.is_target_county ? '#22d3ee' : '#64748b' })
+              .bindPopup(`<b>${c.roadway}</b> (${c.county})<br/>${c.location}`);
+            m.on('click', () => selectCamera(c));
+            markersLayer.addLayer(m);
+          }
+          const div = document.createElement('div');
+          div.className = 'py-2 px-2 hover:bg-slate-800/70 cursor-pointer flex justify-between items-center';
+          div.innerHTML = `<span><b class="text-cyan-300">${c.county}</b> • ${c.roadway} (${c.location})</span><span class="text-[10px] text-slate-400">View</span>`;
+          div.onclick = () => selectCamera(c);
+          camList.appendChild(div);
+        });
+
+        // USGS
+        const usgsBody = document.getElementById('usgs-tbody');
+        usgsBody.innerHTML = '';
+        (rivers.gauges || []).forEach(g => {
+          if (markersLayer && g.lat && g.lng) {
+            markersLayer.addLayer(L.circleMarker([g.lat, g.lng], { radius: 7, color: '#10b981' }).bindPopup(`<b>${g.name}</b><br/>Stage: ${g.height_ft ?? '--'} ft | Flow: ${g.flow_cfs ?? '--'} cfs`));
+          }
+          usgsBody.innerHTML += `<tr>
+            <td class="py-2 pr-2 font-sans text-slate-200">${g.name}</td>
+            <td class="py-2 pr-2 text-slate-400">${g.county}</td>
+            <td class="py-2 pr-2 text-cyan-300 font-bold">${g.height_ft ?? '--'}</td>
+            <td class="py-2 pr-2 text-slate-300">${g.flow_cfs ?? '--'}</td>
+            <td class="py-2"><span class="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 text-[10px]">${g.status}</span></td>
+          </tr>`;
+        });
+
+        // Repeaters
+        const repBody = document.getElementById('repeater-tbody');
+        repBody.innerHTML = '';
+        (reps.repeaters || []).forEach(r => {
+          if (markersLayer && r.lat && r.lng) {
+            markersLayer.addLayer(L.circleMarker([r.lat, r.lng], { radius: 6, color: '#f59e0b' }).bindPopup(`<b>${r.county} Repeater (${r.callsign})</b><br/>${r.output_mhz} MHz (${r.tone_hz}) | NOAA ${r.noaa_mhz}`));
+          }
+          repBody.innerHTML += `<tr>
+            <td class="py-2 pr-2 text-amber-300 font-bold">${r.county}</td>
+            <td class="py-2 pr-2 text-slate-200">${r.callsign}</td>
+            <td class="py-2 pr-2 text-slate-300">${r.output_mhz} (${r.tone_hz})</td>
+            <td class="py-2 pr-2 text-cyan-300">${r.noaa_mhz}</td>
+            <td class="py-2 text-slate-400">${r.lora_slot}</td>
+          </tr>`;
+        });
+
+        // Compliance Registrations
+        const regBody = document.getElementById('reg-tbody');
+        regBody.innerHTML = '';
+        (compRes.registrations || []).forEach(reg => {
+          regBody.innerHTML += `<tr>
+            <td class="py-2.5 pr-2 font-semibold text-white">${reg.authority}</td>
+            <td class="py-2.5 pr-2 text-slate-300">${reg.credential_name}</td>
+            <td class="py-2.5 pr-2 font-mono text-amber-300">${reg.identifier_value}</td>
+            <td class="py-2.5 pr-2 font-mono text-xs text-cyan-300">${reg.status}</td>
+            <td class="py-2.5 pr-2 text-slate-400">${reg.blocking_gate}</td>
+            <td class="py-2.5"><button onclick="promptRegUpdate('${reg.reg_id}', '${reg.identifier_value}')" class="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-amber-300 font-mono">Set ID</button></td>
+          </tr>`;
+        });
+
+        document.getElementById('chain-hash-badge').textContent = `HEAD: ${(compRes.audit_chain?.head_sha256 || '').slice(0, 18)}...`;
+        const ledgerList = document.getElementById('ledger-list');
+        ledgerList.innerHTML = '';
+        (compRes.ledger || []).forEach(l => {
+          const badgeCls = l.provenance === '[OBSERVED]' ? 'text-emerald-400' : 'text-amber-300';
+          ledgerList.innerHTML += `<div class="py-2">
+            <div class="flex justify-between"><span class="${badgeCls} font-bold">${l.provenance} ${l.program}</span><span class="text-white font-bold">$${Number(l.amount_usd).toLocaleString()}</span></div>
+            <div class="text-slate-300">${l.cost_category}</div>
+            <div class="text-[10px] text-slate-500">SHA256: ${l.entry_hash.slice(0, 28)}...</div>
+          </div>`;
+        });
+        if ((compRes.quarterly_reports || []).length > 0 && !document.getElementById('qpr-output').value) {
+          document.getElementById('qpr-output').value = compRes.quarterly_reports[0].markdown_body;
+        }
+
+        // Aria & OpenBot 1.0
+        const ariaDiv = document.getElementById('aria-routines');
+        ariaDiv.innerHTML = '';
+        (ariaRes.routines || []).forEach(rt => {
+          ariaDiv.innerHTML += `<div class="p-2.5 rounded-lg bg-slate-900 border border-slate-800">
+            <div class="flex justify-between font-mono"><span class="text-cyan-300 font-bold">${rt.id}</span><span class="text-emerald-400">${rt.status}</span></div>
+            <div class="text-slate-400 mt-0.5">${rt.scope} (${rt.schedule})</div>
+          </div>`;
+        });
+
+        const ts = ob1Res.tailscale_mesh || {};
+        document.getElementById('tailscale-badge').textContent = ts.connected
+          ? `Tailscale ACTIVE (${(ts.tailscale_ips || [])[0] || ts.hostname})`
+          : (ts.installed ? 'Tailscale Installed (Offline)' : 'Tailscale Ready to Pair');
+
+        const usageBody = document.getElementById('usage-tbody');
+        usageBody.innerHTML = '';
+        (ob1Res.usage_leaderboard || []).forEach(u => {
+          usageBody.innerHTML += `<tr>
+            <td class="py-2 pr-2 font-sans text-white font-semibold">${u.bot_name}</td>
+            <td class="py-2 pr-2 text-cyan-300">${u.model}</td>
+            <td class="py-2 pr-2 text-slate-200">${Number(u.total_tokens).toLocaleString()}</td>
+            <td class="py-2 pr-2 text-slate-400">${u.avg_latency_ms} ms</td>
+            <td class="py-2 text-emerald-400 font-bold">$0.00 (Local OSS)</td>
+          </tr>`;
+        });
+
+        const learnList = document.getElementById('learnings-list');
+        learnList.innerHTML = '';
+        (ob1Res.team_review_learnings || []).forEach(lr => {
+          learnList.innerHTML += `<div class="p-3 rounded-lg bg-slate-900 border border-slate-800 space-y-1.5">
+            <div class="flex justify-between font-mono"><span class="text-amber-300">${lr.target_bot}</span><span class="text-cyan-300">${lr.status}</span></div>
+            <p class="text-slate-200">${lr.proposed_rule}</p>
+            ${lr.status === 'PENDING_OWNER_REVIEW' ? `<div class="flex gap-2 pt-1">
+              <button onclick="reviewLearning('${lr.learning_id}', 'approve')" class="px-2.5 py-1 rounded bg-emerald-500 text-slate-950 font-bold">Approve</button>
+              <button onclick="reviewLearning('${lr.learning_id}', 'reject')" class="px-2.5 py-1 rounded bg-slate-800 text-rose-300">Reject</button>
+            </div>` : ''}
+          </div>`;
+        });
+      } catch (err) {
+        console.error('GodMode sync error:', err);
+      }
+    }
+
+    async function refreshStreams() {
+      document.getElementById('last-sync-label').textContent = 'Refreshing live NC DOT + USGS + NWS...';
+      await fetch(API_BASE + '/api/streams/refresh', { method: 'POST' });
+      await loadAll();
+    }
+
+    async function promptRegUpdate(regId, currentVal) {
+      const val = prompt('Enter verified registration ID (EIN / UEI / SL-4001 / Vendor ID):', currentVal);
+      if (!val) return;
+      await fetch(API_BASE + '/api/compliance/registrations/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reg_id: regId, identifier_value: val, status: 'VERIFIED_ACTIVE' })
+      });
+      await loadAll();
+    }
+
+    async function generateQPR() {
+      document.getElementById('qpr-output').value = 'Synthesizing 2026-Q4 Quarterly Progress Report via local Ollama (gemma4:12b)...';
+      const res = await fetch(API_BASE + '/api/compliance/qpr/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fiscal_quarter: '2026-Q4', program: 'NCEM_HMGP_350K', use_ollama: true })
+      }).then(r => r.json());
+      document.getElementById('qpr-output').value = res.markdown_body || JSON.stringify(res, null, 2);
+      await loadAll();
+    }
+
+    async function reviewLearning(id, action) {
+      await fetch(API_BASE + '/api/openbot1/learnings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, learning_id: id })
+      });
+      await loadAll();
+    }
+
+    async function submitShareSheet() {
+      const title = document.getElementById('share-title').value || 'Shared Item';
+      const payload_text = document.getElementById('share-body').value || '';
+      const res = await fetch(API_BASE + '/api/openbot1/share', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, payload_text })
+      }).then(r => r.json());
+      document.getElementById('share-result').textContent = `Verdict: ${res.scam_risk_verdict} -> Routed to ${res.routed_to_bot}`;
+      await loadAll();
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      initMap();
+      loadAll();
+    });
+  </script>
+</body>
+</html>
