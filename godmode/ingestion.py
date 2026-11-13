@@ -278,35 +278,47 @@ def _parse_wkt_point(wkt: Optional[str]) -> Tuple[Optional[float], Optional[floa
     return lat, lng
 
 
-def ingest_ncdot_cameras(db_path: Path, sample_size: int = 250) -> Dict[str, Any]:
+def ingest_ncdot_cameras(db_path: Path, sample_size: int = 1100) -> Dict[str, Any]:
     """
     Pulls real-time NC DOT DriveNC traffic cameras from https://drivenc.gov/List/GetData/Cameras
     (100% open data, zero closed-source API keys required).
-    Prioritizes the 7 NCEM grant target counties + primary evacuation corridors.
+    Pages across the full statewide feed (~1,004 cameras) and prioritizes the 7 NCEM grant target counties.
     """
     now_iso = datetime.now(timezone.utc).isoformat()
-    query_obj = {
-        "columns": [{"data": None, "name": ""}],
-        "start": 0,
-        "length": sample_size,
-    }
-    encoded_q = urllib.parse.quote(json.dumps(query_obj, separators=(",", ":")))
-    url = f"https://drivenc.gov/List/GetData/Cameras?query={encoded_q}"
 
     try:
-        req = urllib.request.Request(
-            url,
-            headers={
-                "User-Agent": "KGUGodModeOpenSource/1.0 (+https://github.com/kguinternational/godmode)",
-                "Accept": "application/json",
-                "X-Requested-With": "XMLHttpRequest",
-            },
-        )
-        with urllib.request.urlopen(req, timeout=12) as resp:
-            payload = json.loads(resp.read().decode("utf-8", errors="ignore"))
+        rows: List[Dict[str, Any]] = []
+        total_statewide = 0
+        page_len = 100
+        start = 0
+        while start < sample_size:
+            query_obj = {
+                "columns": [{"data": None, "name": ""}],
+                "start": start,
+                "length": page_len,
+            }
+            encoded_q = urllib.parse.quote(json.dumps(query_obj, separators=(",", ":")))
+            url = f"https://drivenc.gov/List/GetData/Cameras?query={encoded_q}"
+            req = urllib.request.Request(
+                url,
+                headers={
+                    "User-Agent": "KGUGodModeOpenSource/1.0 (+https://github.com/kguinternational/godmode)",
+                    "Accept": "application/json",
+                    "X-Requested-With": "XMLHttpRequest",
+                },
+            )
+            with urllib.request.urlopen(req, timeout=12) as resp:
+                payload = json.loads(resp.read().decode("utf-8", errors="ignore"))
+            if total_statewide == 0:
+                total_statewide = int(payload.get("recordsTotal", 0))
+            batch = payload.get("data") or []
+            if not batch:
+                break
+            rows.extend(batch)
+            start += len(batch)
+            if total_statewide and start >= total_statewide:
+                break
 
-        total_statewide = int(payload.get("recordsTotal", 0))
-        rows = payload.get("data", [])
         parsed: List[Dict[str, Any]] = []
 
         for item in rows:
@@ -543,7 +555,7 @@ def run_full_gis_cycle(db_path: Path) -> Dict[str, Any]:
     """Executes complete NC DOT + USGS + NWS + 7-County Repeater ingestion cycle and logs telemetry."""
     init_gis_tables(db_path)
     t0 = time.time()
-    cams = ingest_ncdot_cameras(db_path, sample_size=300)
+    cams = ingest_ncdot_cameras(db_path, sample_size=1100)
     rivers = ingest_usgs_rivers(db_path)
     alerts = ingest_nws_nc_alerts(db_path)
     elapsed_ms = int((time.time() - t0) * 1000)

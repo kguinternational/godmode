@@ -9,3 +9,4 @@ data/*.db
 logs/
 exports/
 .DS_Store
+data/
