@@ -23,53 +23,64 @@ LOCAL_OSS_MODEL = os.getenv("GODMODE_OSS_MODEL", "gemma4:12b")
 DEFAULT_REGISTRATIONS: List[Dict[str, Any]] = [
     {
         "reg_id": "irs_501c3",
-        "authority": "Internal Revenue Service (IRS)",
-        "credential_name": "501(c)(3) Public Charity Determination & Annual Form 990",
-        "entity": "The JC Coffey Foundation",
+        "authority": "Internal Revenue Service (IRS) & Florida Sunbiz",
+        "credential_name": "501(c)(3) Public Charity Determination & FL Not-for-Profit Good Standing ($8.75)",
+        "entity": "JC Coffey Foundation (Florida Nonprofit)",
         "identifier_value": "PENDING_OPERATOR_EIN_ENTRY",
-        "portal_url": "https://www.irs.gov/charities-non-profits",
+        "portal_url": "https://dos.fl.gov/sunbiz/",
         "status": "ACTION_REQUIRED_VERIFY_EIN",
-        "renewal_cycle": "Annual (Form 990 / 990-EZ / 990-N by 15th day of 5th month)",
-        "blocking_gate": "Human Gate: Enter verified EIN & attach IRS Determination Letter PDF",
+        "renewal_cycle": "Annual FL Nonprofit Report (May 1) + IRS Form 990 (15th day of 5th month)",
+        "blocking_gate": "Human Gate: Pull $8.75 FL Sunbiz Certificate of Status PDF & verify Foundation EIN",
+    },
+    {
+        "reg_id": "nc_sos_n09_foreign",
+        "authority": "NC Secretary of State — Business Registration Division",
+        "credential_name": "Certificate of Authority — Foreign Nonprofit Corporation (Form N-09, $125)",
+        "entity": "JC Coffey Foundation (Florida Nonprofit -> Foreign Qualification in NC)",
+        "identifier_value": "PENDING_N09_FOREIGN_FILING",
+        "portal_url": "https://www.sosnc.gov",
+        "status": "READY_TO_FILE_ONLINE",
+        "renewal_cycle": "One-time Foreign Qualification ($125) + NC Registered Agent maintenance",
+        "blocking_gate": "Human Gate: File Form N-09 ($125) on sosnc.gov attaching FL Sunbiz Certificate of Status",
     },
     {
         "reg_id": "nc_sos_sl4001",
         "authority": "NC Secretary of State — Charitable Solicitation Licensing",
-        "credential_name": "NC Charitable Solicitation License / Exemption (Form SL-4001)",
-        "entity": "The JC Coffey Foundation",
+        "credential_name": "NC Charitable Solicitation License (Form SL-4001, $50) + FL FDACS Check",
+        "entity": "JC Coffey Foundation (Florida Nonprofit)",
         "identifier_value": "PENDING_SL4001_FILING",
         "portal_url": "https://www.sosnc.gov/divisions/charities",
         "status": "READY_TO_FILE_ONLINE",
-        "renewal_cycle": "Annual (within 4.5 months of fiscal year-end)",
-        "blocking_gate": "Human Gate: Sign & submit Form SL-4001 on sosnc.gov before statewide public solicitation",
+        "renewal_cycle": "Annual (within 4.5 months of fiscal year-end; match FL FDACS § 496.405)",
+        "blocking_gate": "Human Gate: File Form SL-4001 ($50) on sosnc.gov before collecting NC matching pledges",
     },
     {
         "reg_id": "federal_sam_uei",
         "authority": "U.S. General Services Administration (SAM.gov)",
-        "credential_name": "Unique Entity Identifier (UEI) & CAGE Code",
-        "entity": "The JC Coffey Foundation & KGU International",
+        "credential_name": "Separate Active UEIs & CAGE Codes (Nonprofit Subrecipient + For-Profit Vendor)",
+        "entity": "JC Coffey Foundation (FL Nonprofit) & KGU International (FL/WY For-Profit)",
         "identifier_value": "PENDING_UEI_CONFIRMATION",
         "portal_url": "https://sam.gov",
         "status": "ACTION_REQUIRED_CONFIRM_ACTIVE",
-        "renewal_cycle": "Annual (365-day mandatory SAM.gov entity renewal)",
-        "blocking_gate": "Human Gate: Confirm active UEI & CAGE in SAM.gov via Login.gov MFA",
+        "renewal_cycle": "Annual (365-day mandatory SAM.gov renewal for both entities)",
+        "blocking_gate": "Human Gate: Confirm separate active UEIs in SAM.gov via Login.gov MFA",
     },
     {
         "reg_id": "nc_evp_ncgms",
         "authority": "NC Dept. of Administration & NCDPS / NCEM",
-        "credential_name": "NC electronic Vendor Portal (eVP) & NC Grants Management System",
-        "entity": "The JC Coffey Foundation (Prime) / KGU International (Subrecipient)",
+        "credential_name": "NC electronic Vendor Portal (eVP) + 2 CFR § 200.318 Arm's-Length COI Protocol",
+        "entity": "JC Coffey Foundation (FL Grantee) & KGU International (FL/WY Technical Vendor)",
         "identifier_value": "PENDING_EVP_VENDOR_ID",
         "portal_url": "https://evp.nc.gov",
         "status": "READY_FOR_ENROLLMENT",
-        "renewal_cycle": "Continuous (update W-9 & N.C.G.S. § 143C-6-23 conflict-of-interest annually)",
-        "blocking_gate": "Human Gate: Enroll entity in evp.nc.gov & upload signed NCEM $350,000 packet",
+        "renewal_cycle": "Continuous (W-9 + N.C.G.S. § 143C-6-23 & IRS § 4958 independent board recusal)",
+        "blocking_gate": "Human Gate: Enroll in evp.nc.gov & attach independent board COI recusal resolution",
     },
     {
         "reg_id": "fema_go_aor",
         "authority": "FEMA / Department of Homeland Security",
         "credential_name": "FEMA Grants Outcomes (FEMA GO) Authorized Organization Representative (AOR)",
-        "entity": "The JC Coffey Foundation",
+        "entity": "JC Coffey Foundation (Subrecipient) + KGU International ($55k Direct Vendor)",
         "identifier_value": "PENDING_AOR_LOGIN",
         "portal_url": "https://go.fema.gov",
         "status": "PACKAGE_STAGED_AWAITING_AOR",
@@ -183,29 +194,43 @@ def init_compliance_tables(db_path: Path) -> None:
             """
         )
 
-        # Seed registrations if empty
-        cnt = conn.execute("SELECT COUNT(*) FROM registrations").fetchone()[0]
-        if cnt == 0:
-            for reg in DEFAULT_REGISTRATIONS:
-                conn.execute(
-                    """
-                    INSERT INTO registrations
-                    (reg_id, authority, credential_name, entity, identifier_value, portal_url, status, renewal_cycle, blocking_gate, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        reg["reg_id"],
-                        reg["authority"],
-                        reg["credential_name"],
-                        reg["entity"],
-                        reg["identifier_value"],
-                        reg["portal_url"],
-                        reg["status"],
-                        reg["renewal_cycle"],
-                        reg["blocking_gate"],
-                        now_iso,
-                    ),
-                )
+        # Seed missing registrations and sync metadata on unverified PENDING_* rows
+        for reg in DEFAULT_REGISTRATIONS:
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO registrations
+                (reg_id, authority, credential_name, entity, identifier_value, portal_url, status, renewal_cycle, blocking_gate, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    reg["reg_id"],
+                    reg["authority"],
+                    reg["credential_name"],
+                    reg["entity"],
+                    reg["identifier_value"],
+                    reg["portal_url"],
+                    reg["status"],
+                    reg["renewal_cycle"],
+                    reg["blocking_gate"],
+                    now_iso,
+                ),
+            )
+            conn.execute(
+                """
+                UPDATE registrations
+                SET authority = ?, credential_name = ?, entity = ?, portal_url = ?, renewal_cycle = ?, blocking_gate = ?
+                WHERE reg_id = ? AND identifier_value LIKE 'PENDING_%'
+                """,
+                (
+                    reg["authority"],
+                    reg["credential_name"],
+                    reg["entity"],
+                    reg["portal_url"],
+                    reg["renewal_cycle"],
+                    reg["blocking_gate"],
+                    reg["reg_id"],
+                ),
+            )
 
         # Seed initial [MODELED] budget baseline & [OBSERVED] open-source platform engineering entry if empty
         l_cnt = conn.execute("SELECT COUNT(*) FROM fiscal_audit_ledger").fetchone()[0]
